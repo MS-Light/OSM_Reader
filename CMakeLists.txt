@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 include_directories( 
     ${OpenCV_INCLUDE_DIRS} 
+    ${CMAKE_SOURCE_DIR}
     /usr/local/include
 )
 
@@ -25,7 +26,7 @@ set_target_properties(
 # )
 
 
-add_executable( auto_parking  ${CMAKE_SOURCE_DIR}/read_osm.cpp)
+add_executable( auto_parking  ${CMAKE_SOURCE_DIR}/read_osm.cpp ${CMAKE_SOURCE_DIR}/helper.cpp)
 
 
 target_link_libraries( auto_parking ${OpenCV_LIBS} readosm expat z)

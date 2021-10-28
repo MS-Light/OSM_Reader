@@ -1,144 +1,79 @@
-#include <readosm.h>
-#include <iostream>
 #include "opencv4/opencv2/core.hpp"
 #include "opencv4/opencv2/imgproc.hpp"
 #include "opencv4/opencv2/highgui.hpp"
 
-struct data_point{
-    int id;
-    float lat;
-    float lon;
-    
-};
+#include "helper.hpp"
+#include "read_osm.hpp"
+
+float LAT_B = 999;
+float LNG_B = 999;
+
+float LAT_M = -999;
+float LNG_M = -999;
+
+
 static int
 parse_node (const void *user_data, const readosm_node * node)
 {
     /* callback function consuming Node objects */
-    struct data_point *my_struct = (struct data_point *) user_data;
-    //... some smart code ...
+    struct mapSaver *my_struct = (struct mapSaver *) user_data;
     char buf[128];
     int i;
     const readosm_tag *tag;
-    if (user_data != NULL)
-        user_data = NULL;
-    /* silencing stupid compiler warnings */
-    #if defined(_WIN32) || defined(__MINGW32__)
-        /* CAVEAT - M$ runtime doesn’t supports %lld for 64 bits */
-        sprintf (buf, "%I64d", node->id);
-    #else
-        sprintf (buf, "%lld", node->id);
-    #endif
-    printf ("\t<node id=\"%s\"", buf);
-    /*
-    * some individual values may be set, or may be not
-    * unset values are identified by the READOSM_UNDEFINED
-    * conventional value, and must be consequently ignored
-    */
-    if (node->latitude != READOSM_UNDEFINED) printf (" lat=\"%1.7f\"", node->latitude);
-    if (node->longitude != READOSM_UNDEFINED) printf (" lon=\"%1.7f\"", node->longitude);
-    if (node->version != READOSM_UNDEFINED) printf (" version=\"%d\"", node->version);
-        if (node->changeset != READOSM_UNDEFINED)
-        {
-    #if defined(_WIN32) || defined(__MINGW32__)
-    /* CAVEAT - M$ runtime doesn’t supports %lld for 64 bits */
-            sprintf (buf, "%I64d", node->changeset);
-    #else
-            sprintf (buf, "%lld", node->changeset);
-    #endif
-            printf (" changeset=\"%s\"", buf); 
-        }
+    if (user_data != NULL) user_data = NULL;
 
-    if (node->user != NULL) printf (" user=\"%s\"", node->user);
-    if (node->uid != READOSM_UNDEFINED) printf (" uid=\"%d\"", node->uid);
-    if (node->timestamp != NULL) printf (" timestamp=\"%s\"", node->timestamp);
+    data_point* temp = new data_point();
+    temp->id = node->id;
+    if (node->latitude != READOSM_UNDEFINED) temp->lat = node->latitude;
+    if (node->longitude != READOSM_UNDEFINED) temp->lon = node->longitude;
+    if (node->version != READOSM_UNDEFINED) temp->version = node->version;
+
+    LAT_B = fmin(LAT_B, temp->lat);
+    LNG_B = fmin(LNG_B, temp->lon);
+
+    LAT_M = fmax(LAT_M, temp->lat);
+    LNG_M = fmax(LNG_M, temp->lon);
    
-
-  /*
-    * the Node object may have its own tag list
-    * please note: this one is a variable-length list,
-    * and may be empty: in this case tag_count will be ZERO
-    */
-    if (node->tag_count == 0) printf (" />\n");
-    else
+    if (node->tag_count != 0)
     {
-    printf (">\n");
         for (i = 0; i < node->tag_count; i++)
         {
-                    /* we’ll now print each <tag> for this node */
             tag = node->tags + i;
-            printf ("\t\t<tag k=\"%s\" v=\"%s\" />\n", tag->key,tag->value);
+            temp->tags.emplace(tag->key,tag->value);
         }
-        printf ("\t</node>\n");
     }
+    my_struct->pointSaver.emplace(node->id, temp);
     return READOSM_OK;
 }
 static int parse_way (const void *user_data, const readosm_way * way)
 {
     /* callback function consuming Way objects */
-    struct data_point *my_struct = (struct data_point *) user_data;
-    char buf[128];
+    struct mapSaver *my_struct = (struct mapSaver *) user_data;
     int i;
     const readosm_tag *tag;
+    way_point* temp = new way_point();
+    temp->id = way->id;
     if (user_data != NULL) user_data = NULL;
-    #if defined(_WIN32) || defined(__MINGW32__)
-    /* CAVEAT - M$ runtime doesn’t supports %lld for 64 bits */
-        sprintf (buf, "%I64d", way->id);
-    #else
-        sprintf (buf, "%lld", way->id);
-    #endif
-        printf ("\t<way id=\"%s\"", buf);
-
-    if (way->version != READOSM_UNDEFINED) printf (" version=\"%d\"", way->version);
-    if (way->changeset != READOSM_UNDEFINED)
-    {
-#if defined(_WIN32) || defined(__MINGW32__)
-/* CAVEAT - M$ runtime doesn’t supports %lld for 64 bits */
-        sprintf (buf, "%I64d", way->changeset);
-        
-#else 
-        sprintf (buf, "%lld", way->changeset);
-#endif
-        printf (" changeset=\"%s\"", buf);
-    }
-    /*
-    * unset string values are identified by a NULL pointer
-    * and must be consequently ignored
-    */
-    if (way->user != NULL) printf (" user=\"%s\"", way->user);
-    if (way->uid != READOSM_UNDEFINED) printf (" uid=\"%d\"", way->uid);
-    if (way->timestamp != NULL) printf (" timestamp=\"%s\"", way->timestamp);
-    /*
-    * the Way object may have a noderefs-list and a tag-list
-
-    * please note: these are variable-length lists, and may
-    * be empty: in this case the corresponding item count
-    * will be ZERO
-    */
-    if (way->tag_count == 0 && way->node_ref_count == 0) printf (" />\n");
+    
+    if (way->version != READOSM_UNDEFINED)temp->version = way->version;
+    
+    
+    if (way->tag_count == 0 && way->node_ref_count == 0) {}
     else
     {
-        printf (">\n");
         for (i = 0; i < way->node_ref_count; i++)
-        {
-            /* we’ll now print each <nd ref> for this way */
-#if defined(_WIN32) || defined(__MINGW32__)
-            /* CAVEAT - M$ runtime doesn’t supports %lld for 64 bits */
-            sprintf (buf, "%I64d", *(way->node_refs + i));
-#else
-            sprintf (buf, "%lld", *(way->node_refs + i));
-#endif
-            printf ("\t\t<nd ref=\"%s\" />\n", buf); 
+        {   
+            temp->points.push_back((long long)(way->node_refs + i));
         }
 
         for (i = 0; i < way->tag_count; i++)
         {
-            /* we’ll now print each <tag> for this way */
             tag = way->tags + i;
-            printf ("\t\t<tag k=\"%s\" v=\"%s\" />\n", tag->key,tag->value);
+            temp->tags.emplace(tag->key,tag->value);
         }
-        printf ("\t</way>\n");
     }
-    //... some smart code ...
+    my_struct->waySaver.emplace(way->id, temp);
+
     return READOSM_OK;
 }
 
@@ -147,115 +82,44 @@ static int
 parse_relation (const void *user_data, const readosm_relation * relation)
 {
     /* callback function consuming Relation objects */
-    struct data_point *my_struct = (struct data_point *) user_data;
+    struct mapSaver *my_struct = (struct mapSaver *) user_data;
 
-    /* 
-    * printing an OSM Relation (callback function) 
-    *
-    * this function is called by the OSM parser for each 
-    * RELATION object found
-    *
-    * please note well: the passed pointer corresponds to
-    * a READ-ONLY object; you can can query any relation-related
-    * value, but you cannot alter them.
-    *
-    ************************************************
-    *
-    * this didactic sample will simply print the relation object
-    * on the standard output adopting the appropriate OSM XML
-    * notation
-    */
-        char buf[128];
         int i;
         const readosm_member *member;
         const readosm_tag *tag;
-        if (user_data != NULL)
-            user_data = NULL;       /* silencing stupid compiler warnings */
-    #if defined(_WIN32) || defined(__MINGW32__)
-        /* CAVEAT - M$ runtime doesn't supports %lld for 64 bits */
-        sprintf (buf, "%I64d", relation->id);
-    #else
-        sprintf (buf, "%lld", relation->id);
-    #endif
-        printf ("\t<relation id=\"%s\"", buf);
-    /*
-    * some individual values may be set, or may be not
-    * unset values are identified by the READOSM_UNDEFINED
-    * conventional value, and must be consequently ignored
-    */
-        if (relation->version != READOSM_UNDEFINED)
-            printf (" version=\"%d\"", relation->version);
-        if (relation->changeset != READOSM_UNDEFINED)
-        {
-    #if defined(_WIN32) || defined(__MINGW32__)
-            /* CAVEAT - M$ runtime doesn't supports %lld for 64 bits */
-            sprintf (buf, "%I64d", relation->changeset);
-    #else
-            sprintf (buf, "%lld", relation->changeset);
-    #endif
-            printf (" changeset=\"%s\"", buf);
-        }
-    /*
-    * unset string values are identified by a NULL pointer
-    * and must be consequently ignored
-    */
-        if (relation->user != NULL)
-            printf (" user=\"%s\"", relation->user);
-        if (relation->uid != READOSM_UNDEFINED)
-            printf (" uid=\"%d\"", relation->uid);
-        if (relation->timestamp != NULL)
-            printf (" timestamp=\"%s\"", relation->timestamp);
-    /*
-    * the Relation object may have a member-list and a tag-list
-    * please note: these are variable-length lists, and may 
-    * be empty: in this case the corresponding item count 
-    * will be ZERO
-    */
+
+        relations* temp = new relations();
+        temp->id = relation->id;
+        temp->member_count = relation->member_count;
+       
         if (relation->tag_count == 0 && relation->member_count == 0)
-            printf (" />\n");
+            {}
         else
         {
-            printf (">\n");
             for (i = 0; i < relation->member_count; i++)
                 {
                     /* we'll now print each <member> for this way */
                     member = relation->members + i;
-    #if defined(_WIN32) || defined(__MINGW32__)
-                    /* CAVEAT - M$ runtime doesn't supports %lld for 64 bits */
-                    sprintf (buf, "%I64d", member->id);
-    #else
-                    sprintf (buf, "%lld", member->id);
-    #endif
-                    /* any <member> may be of "node", "way" or "relation" type */
-                    switch (member->member_type)
-                    {
-                    case READOSM_MEMBER_NODE:
-                        printf ("\t\t<member type=\"node\" ref=\"%s\"", buf);
-                        break;
-                    case READOSM_MEMBER_WAY:
-                        printf ("\t\t<member type=\"way\" ref=\"%s\"", buf);
-                        break;
-                    case READOSM_MEMBER_RELATION:
-                        printf ("\t\t<member type=\"relation\" ref=\"%s\"", buf);
-                        break;
-                    default:
-                        printf ("\t\t<member ref=\"%s\"", buf);
-                        break;
-                    };
-                    if (member->role != NULL)
-                        printf (" role=\"%s\" />\n", member->role);
-                    else
-                        printf (" />\n");
+                    relation_member* mb_temp = new relation_member();
+                    mb_temp->reference = member->id;
+                    mb_temp->type = member->member_type;
+                    // std::cout<<relation->id<<","<<member->id<<std::endl;
+                    if (member->role != NULL) mb_temp->role = member->role;
+                    temp->relation_members.push_back(mb_temp);
+                    
                 }
             for (i = 0; i < relation->tag_count; i++)
                 {
                     /* we'll now print each <tag> for this way */
                     tag = relation->tags + i;
-                    printf ("\t\t<tag k=\"%s\" v=\"%s\" />\n", tag->key,
-                            tag->value);
+                    temp->tags.emplace(tag->key,tag->value);
+                    if (tag->value == "parking_access" && tag->key == "subtype"){
+                        my_struct->parking_relation.push_back((long long)relation->id);
+                    }
                 }
-            printf ("\t</relation>\n");
+            my_struct->relationSaver.emplace(relation->id, temp);
         }
+
     //... some smart code ...
     return READOSM_OK;
 }
@@ -263,11 +127,119 @@ parse_relation (const void *user_data, const readosm_relation * relation)
 int main(){
     int ret;
     const void *handle;
-    struct data_point data_saved;
+    mapSaver data_saved;
 
     ret = readosm_open("../test/vinpearl_nt_1009.osm", &handle);
     ret = readosm_parse (handle, &data_saved, parse_node, parse_way, parse_relation);
     ret = readosm_close(handle);
+
+    for (auto& i : data_saved.relationSaver){
+
+        for (auto j : i.second->relation_members)
+        {
+            /* we'll now print each <member> for this way */
+            switch (j->type)
+            {
+            case READOSM_MEMBER_NODE:
+                data_saved.pointSaver.find(j->reference)->second->relation.push_back((long long)(i.second->id));
+                break;
+            case READOSM_MEMBER_WAY:
+                data_saved.waySaver.find(j->reference)->second->relation.push_back((long long)(i.second->id));
+                break;
+            case READOSM_MEMBER_RELATION:
+                data_saved.relationSaver.find(j->reference)->second->relation_nb.push_back((long long)(i.second->id));
+                break;
+            default:
+                
+                break;
+            };
+        }
+    }
+
+    
+
+    int offsetMapVisualizer = 0;
+    int key = 0;
+    float angle = 180;
+    std::cout<<LAT_B<<","<<LNG_B<<std::endl;
+    std::cout<<LAT_M<<","<<LNG_M<<std::endl;
+    bk::block car;
+    car.set_block(500,500);
+    car.set_map(LAT_B, LNG_B);
+    car.set_angle(angle);
+    car.set_offset(offsetMapVisualizer);
+    car.set_carP(500, 500);
+    car.set_block_point();
+    car.set_scale(0.2);
+
+    while(key!=27){
+        cv::Mat mapVisualizer = cv::Mat(cv::Size(1000,1000), CV_8UC3, cv::Scalar(255, 255, 255));
+        // if (car.get_lon()-LNG_B < 0.0025 || car.get_lon()-LNG_B > 0.0075 ||car.get_lat()-LAT_B < 0.0025 || car.get_lat()-LAT_B > 0.0075){
+        //     LAT_B = car.get_lat()-0.005;
+        //     LNG_B = car.get_lon()-0.005;
+        //     car.update_map();
+        //     car.set_block_point();
+        // }
+  
+        cv::circle(mapVisualizer, cv::Point2f(/*car.get_pixelLat(), car.get_pixelLon()*/500,500), 8.0, cv::Scalar(0, 0, 255), 2, 8);
+        for(auto& i : data_saved.pointSaver){
+            auto data = i.second;
+            auto temp = car.get_transform(data->lat, data->lon);
+            cv::circle(mapVisualizer, cv::Point2f(temp[0], temp[1]), 1.0, cv::Scalar(0, 255, 0), 2, 8);
+        }
+
+
+
+
+        cv::imshow("output", mapVisualizer);
+
+        float ang_rad = car.get_angle()/180*MY_PI;
+        
+        //WAITKEY:
+        key = cv::waitKey(-1);
+        if (key == 'a') {
+            angle -= 2;
+            car.set_angle(angle);
+            car.set_block_point();
+        }
+        else if (key == 'd') {
+            angle += 2;
+            car.set_angle(angle);
+            car.set_block_point();
+        }
+        else if (key == 'i'){
+            car.set_carP(car.get_pixelLat()+10*sin(-ang_rad), car.get_pixelLon()+10*cos(-ang_rad));
+            car.set_block_point();
+        }
+        else if (key == 'k'){
+            car.set_carP(car.get_pixelLat()-10*sin(-ang_rad), car.get_pixelLon()-10*cos(-ang_rad));
+            car.set_block_point();
+        }
+        else if (key == 'j'){
+            car.set_carP(car.get_pixelLat()+10*cos(ang_rad), car.get_pixelLon()+10*sin(ang_rad));
+            car.set_block_point();
+        }
+        else if (key == 'l'){
+            car.set_carP(car.get_pixelLat()-10*cos(ang_rad), car.get_pixelLon()-10*sin(ang_rad));
+            car.set_block_point();
+        }
+        
+        else if (key == '='){
+            car.set_scale(car.get_scale()+1);
+            car.set_block_point();
+            //std::cout<<"rp_index: "<<rp_index<<std::endl;
+        }
+        else if (key == '-'){
+            car.set_scale(car.get_scale()-1);
+            car.set_block_point();
+            //std::cout<<"rp_index: "<<rp_index<<std::endl;
+        }
+        else if (key == 27){
+        continue;
+        }
+    }
+
+
 
     return 0;
 }
