@@ -27,12 +27,6 @@ parse_node (const void *user_data, const readosm_node * node)
     if (node->latitude != READOSM_UNDEFINED) temp->lat = node->latitude;
     if (node->longitude != READOSM_UNDEFINED) temp->lon = node->longitude;
     if (node->version != READOSM_UNDEFINED) temp->version = node->version;
-
-    LAT_B = fmin(LAT_B, temp->lat);
-    LNG_B = fmin(LNG_B, temp->lon);
-
-    LAT_M = fmax(LAT_M, temp->lat);
-    LNG_M = fmax(LNG_M, temp->lon);
    
     if (node->tag_count != 0)
     {
@@ -63,7 +57,7 @@ static int parse_way (const void *user_data, const readosm_way * way)
     {
         for (i = 0; i < way->node_ref_count; i++)
         {   
-            temp->points.push_back((long long)(way->node_refs + i));
+            temp->points.push_back((long long)*(way->node_refs + i));//problem
         }
 
         for (i = 0; i < way->tag_count; i++)
@@ -113,7 +107,7 @@ parse_relation (const void *user_data, const readosm_relation * relation)
                     /* we'll now print each <tag> for this way */
                     tag = relation->tags + i;
                     temp->tags.emplace(tag->key,tag->value);
-                    if (tag->value == "parking_access" && tag->key == "subtype"){
+                    if (temp->tags[tag->key] == "parking_access"){
                         my_struct->parking_relation.push_back((long long)relation->id);
                     }
                 }
@@ -141,13 +135,13 @@ int main(){
             switch (j->type)
             {
             case READOSM_MEMBER_NODE:
-                data_saved.pointSaver.find(j->reference)->second->relation.push_back((long long)(i.second->id));
+                data_saved.pointSaver[j->reference]->relation.push_back((long long)(i.second->id));
                 break;
             case READOSM_MEMBER_WAY:
-                data_saved.waySaver.find(j->reference)->second->relation.push_back((long long)(i.second->id));
+                data_saved.waySaver[j->reference]->relation.push_back((long long)(i.second->id));
                 break;
             case READOSM_MEMBER_RELATION:
-                data_saved.relationSaver.find(j->reference)->second->relation_nb.push_back((long long)(i.second->id));
+                data_saved.relationSaver[j->reference]->relation_nb.push_back((long long)(i.second->id));
                 break;
             default:
                 
@@ -155,8 +149,42 @@ int main(){
             };
         }
     }
+    std::vector<long long> parking_area;
+    for (auto i : data_saved.parking_relation){
+        parking_area.push_back(i);
+        auto& temp_relation = data_saved.relationSaver[i];
+        std::string parking_spots = temp_relation->tags["parking_spots"];
+        std::replace(parking_spots.begin(), parking_spots.end(), ',', ' ');
+        std::stringstream ss;    
+        ss << parking_spots;
+        int found;
+        while (!ss.eof()) {
+            std::string temp;
+            ss >> temp;
+            std::cout<<temp<<std::endl;
+            
+            if (std::stringstream(temp) >> found){
+                std::string::size_type sz;
+                parking_area.push_back(std::stoi(temp,&sz));
+            }
+        }
 
+    }
+    for (long long park_relative : parking_area){
+        for (auto& way_member : data_saved.relationSaver[park_relative]->relation_members){
+            for(long long point_member : data_saved.waySaver[way_member->reference]->points){
+             
+                auto& point_data = data_saved.pointSaver[point_member];
     
+                LAT_B = fmin(LAT_B, point_data->lat);
+                LNG_B = fmin(LNG_B, point_data->lon);
+
+                LAT_M = fmax(LAT_M, point_data->lat);
+                LNG_M = fmax(LNG_M, point_data->lon);
+
+            }
+        }
+    }
 
     int offsetMapVisualizer = 0;
     int key = 0;
@@ -165,12 +193,12 @@ int main(){
     std::cout<<LAT_M<<","<<LNG_M<<std::endl;
     bk::block car;
     car.set_block(500,500);
-    car.set_map(LAT_B, LNG_B);
+    car.set_map(LAT_B-0.00445, LNG_B-0.00325);
     car.set_angle(angle);
     car.set_offset(offsetMapVisualizer);
     car.set_carP(500, 500);
     car.set_block_point();
-    car.set_scale(0.2);
+    car.set_scale(14);
 
     while(key!=27){
         cv::Mat mapVisualizer = cv::Mat(cv::Size(1000,1000), CV_8UC3, cv::Scalar(255, 255, 255));
@@ -182,12 +210,35 @@ int main(){
         // }
   
         cv::circle(mapVisualizer, cv::Point2f(/*car.get_pixelLat(), car.get_pixelLon()*/500,500), 8.0, cv::Scalar(0, 0, 255), 2, 8);
-        for(auto& i : data_saved.pointSaver){
-            auto data = i.second;
-            auto temp = car.get_transform(data->lat, data->lon);
-            cv::circle(mapVisualizer, cv::Point2f(temp[0], temp[1]), 1.0, cv::Scalar(0, 255, 0), 2, 8);
-        }
+        // for(auto& i : data_saved.pointSaver){
+        //     auto data = i.second;
+        //     auto temp = car.get_transform(data->lat, data->lon);
+        //     cv::circle(mapVisualizer, cv::Point2f(temp[0], temp[1]), 1.0, cv::Scalar(0, 255, 0), 2, 8);
+        // }
 
+        int color_idx = 0;
+        for (long long park_relative : parking_area){
+            color_idx++;
+            for (auto& way_member : data_saved.relationSaver[park_relative]->relation_members){
+                bool first_round = true;
+                Eigen::Vector3f temp;
+                for(long long point_member : data_saved.waySaver[way_member->reference]->points){
+                    auto point_data = data_saved.pointSaver[point_member];
+                    auto temp2 = car.get_transform(point_data->lat, point_data->lon);
+                    if(first_round){
+                        first_round = false;
+                        cv::circle(mapVisualizer, cv::Point2f(temp2[0], temp2[1]), 1.0, cv::Scalar(0, 255, 0), 2, 8);
+                    }else{
+                        cv::circle(mapVisualizer, cv::Point2f(temp2[0], temp2[1]), 1.0, cv::Scalar(0, 255, 0), 2, 8);
+                        cv::line(mapVisualizer, cv::Point2f(temp[0], temp[1]),cv::Point2f(temp2[0], temp2[1]), cv::Scalar(255- (color_idx%2)*255 , 255 - ((color_idx+1)%2)*255 , 0), 4,8);
+                    }
+                    temp = temp2;
+                    
+                    
+                    
+                }
+            }
+        }
 
 
 
