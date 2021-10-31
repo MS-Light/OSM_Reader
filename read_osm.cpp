@@ -192,24 +192,27 @@ int main(){
     std::cout<<LAT_B<<","<<LNG_B<<std::endl;
     std::cout<<LAT_M<<","<<LNG_M<<std::endl;
     bk::block car;
-    car.set_block(500,500);
-    car.set_map(LAT_B-0.00445, LNG_B-0.00325);
+    car.set_block(50,50);
+    car.set_map(LAT_B-0.000405, LNG_B-0.000285);
     car.set_angle(angle);
     car.set_offset(offsetMapVisualizer);
-    car.set_carP(500, 500);
+    car.set_carP(50, 50);
     car.set_block_point();
-    car.set_scale(14);
+    car.set_scale(5);
 
     while(key!=27){
-        cv::Mat mapVisualizer = cv::Mat(cv::Size(1000,1000), CV_8UC3, cv::Scalar(255, 255, 255));
+        cv::Mat mapVisualizer = cv::Mat(cv::Size(100,100), CV_8UC1, cv::Scalar(255));
         // if (car.get_lon()-LNG_B < 0.0025 || car.get_lon()-LNG_B > 0.0075 ||car.get_lat()-LAT_B < 0.0025 || car.get_lat()-LAT_B > 0.0075){
         //     LAT_B = car.get_lat()-0.005;
         //     LNG_B = car.get_lon()-0.005;
         //     car.update_map();
         //     car.set_block_point();
         // }
+        cv::Mat mask;
+        compare(mapVisualizer, cv::Scalar::all(235), mask, cv::CMP_GT);
+        mapVisualizer.setTo(cv::Scalar::all(0), mask);
   
-        cv::circle(mapVisualizer, cv::Point2f(/*car.get_pixelLat(), car.get_pixelLon()*/500,500), 8.0, cv::Scalar(0, 0, 255), 2, 8);
+        //cv::circle(mapVisualizer, cv::Point2f(/*car.get_pixelLat(), car.get_pixelLon()*/50,50), 8.0, cv::Scalar(255), 2, 8);
         // for(auto& i : data_saved.pointSaver){
         //     auto data = i.second;
         //     auto temp = car.get_transform(data->lat, data->lon);
@@ -227,10 +230,12 @@ int main(){
                     auto temp2 = car.get_transform(point_data->lat, point_data->lon);
                     if(first_round){
                         first_round = false;
-                        cv::circle(mapVisualizer, cv::Point2f(temp2[0], temp2[1]), 1.0, cv::Scalar(0, 255, 0), 2, 8);
+                        //cv::circle(mapVisualizer, cv::Point2f(temp2[0], temp2[1]), 1.0, cv::Scalar(0, 255, 0), 2, 8);
                     }else{
-                        cv::circle(mapVisualizer, cv::Point2f(temp2[0], temp2[1]), 1.0, cv::Scalar(0, 255, 0), 2, 8);
-                        cv::line(mapVisualizer, cv::Point2f(temp[0], temp[1]),cv::Point2f(temp2[0], temp2[1]), cv::Scalar(255- (color_idx%2)*255 , 255 - ((color_idx+1)%2)*255 , 0), 4,8);
+                        //cv::circle(mapVisualizer, cv::Point2f(temp2[0], temp2[1]), 1.0, cv::Scalar(0, 255, 0), 2, 8);
+                        //cv::line(mapVisualizer, cv::Point2f(temp[0], temp[1]),cv::Point2f(temp2[0], temp2[1]), cv::Scalar(255- (color_idx%2)*255 , 255 - ((color_idx+1)%2)*255 , 0), 4,8);
+                        cv::line(mapVisualizer, cv::Point2f(temp[0], temp[1]),cv::Point2f(temp2[0], temp2[1]), cv::Scalar(255), 4,8);
+
                     }
                     temp = temp2;
                     
@@ -243,6 +248,10 @@ int main(){
 
 
         cv::imshow("output", mapVisualizer);
+        
+        std::ofstream outputFile("costmap.csv");
+        outputFile << format(mapVisualizer, cv::Formatter::FMT_CSV) << std::endl;
+        outputFile.close();
 
         float ang_rad = car.get_angle()/180*MY_PI;
         

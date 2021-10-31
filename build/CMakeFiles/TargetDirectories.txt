@@ -1,0 +1,3 @@
+/Users/yanbojiang/Downloads/vinfast/read_osm/build/CMakeFiles/rebuild_cache.dir
+/Users/yanbojiang/Downloads/vinfast/read_osm/build/CMakeFiles/edit_cache.dir
+/Users/yanbojiang/Downloads/vinfast/read_osm/build/CMakeFiles/auto_parking.dir

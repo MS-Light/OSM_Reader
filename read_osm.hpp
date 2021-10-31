@@ -3,6 +3,7 @@
 #include <readosm.h>
 #include <iostream>
 #include <map>
+#include <fstream>
 
 class data_point{
     public:

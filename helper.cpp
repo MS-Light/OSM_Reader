@@ -232,7 +232,7 @@ float bk::block::get_angle(){
 
 Eigen::Vector3f bk::block::get_transform(float lat, float lon){
     Eigen::Vector3f point = Eigen::Vector3f(lat2dist(lat, carM[0]), lon2dist(lon, carM[1], carM[0]), 1);
-    Eigen::Vector3f val = get_view_matrix(Eigen::Vector3f({500,500,1}))* scale_matrix * p_model_matrix * point;
+    Eigen::Vector3f val = get_view_matrix(Eigen::Vector3f({50,50,1}))* scale_matrix * p_model_matrix * point;
     return val;
 }
 Eigen::Vector3f bk::block::get_transform_ego(float lat, float lon){
